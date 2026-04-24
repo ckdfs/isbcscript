@@ -31,7 +31,7 @@ POWER_OFFSET_DB = 6.0      # dB  FSV30 known calibration offset (reads ~6 dB hig
 SWEEP_TIMEOUT_S = 120      # s
 
 # ── Fitting ───────────────────────────────────────────────────────────────────
-FIT_WINDOW_FRAC = 1 / 3    # fraction of Vpi used as monotonic window around V0
+FIT_WINDOW_FRAC = 0.20     # fraction of Vpi; must be < 0.25 for max_quad (asymptote at Vpi/4)
 
 # ── Control loop ─────────────────────────────────────────────────────────────
 K_I             = 0.01     # integral gain (tune from small value)
