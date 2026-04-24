@@ -115,6 +115,9 @@ def save_fit_plot(path: str,
     r_target_db = 20 * math.log10(fit_result.r_target)
 
     # fit window + 50% buffer for x-axis zoom
+    # For max_quad: asymptote (P2→0) at actual_offset = V0_fit,
+    #               zero (P1→0) at actual_offset = V0_fit + Vpi/2.
+    # centre is the target max point (actual_offset = Vpi/4 + V0_fit).
     window   = vpi * cfg.FIT_WINDOW_FRAC
     centre   = vpi / 4 + fit_result.V0
     buf      = window * 0.5

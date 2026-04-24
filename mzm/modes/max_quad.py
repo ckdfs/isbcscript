@@ -38,7 +38,12 @@ class MaxQuadMode(ModeBase):
         return [round(v + shift, 6) for v in base_offsets]
 
     def fit_model(self, v, A: float, V0: float, vpi_fit: float):
-        return A * np.abs(np.tan(np.pi * (v - V0) / vpi_fit + np.pi / 4))
+        # r = A·|tan(π/4 − π(v−V0)/Vpi)|
+        # Monotonically decreasing in vdc_eff:
+        #   asymptote (P2→0) at vdc_eff = V0 − Vpi/4  (left edge)
+        #   target R_target = A at vdc_eff = V0         (centre)
+        #   zero    (P1→0) at vdc_eff = V0 + Vpi/4  (right edge)
+        return A * np.abs(np.tan(np.pi / 4 - np.pi * (v - V0) / vpi_fit))
 
     def initial_offset(self, vpi: float, V0_fit: float) -> float:
         return vpi / 4 + V0_fit

@@ -53,10 +53,20 @@ def ratio_fit(actual_offsets: list, s1_dbm: list, s2_dbm: list,
     vdc_fit = vdc_eff[mask]
     r_fit   = r_meas[mask]
 
-    p0 = [1.0, 0.0, vpi]
+    # Initial guess: A ≈ r at vdc_eff closest to 0 (= R_target by definition),
+    # V0 = 0 (no DC offset correction), vpi_fit = vpi_scan.
+    idx_centre = int(np.argmin(np.abs(vdc_fit)))
+    A0 = float(r_fit[idx_centre])
+    p0 = [A0, 0.0, vpi]
+
+    # Bounds prevent degenerate solutions (V0 within ±Vpi/2, vpi_fit within 50–200% of vpi_scan).
+    bounds = (
+        [0.0,       -vpi / 2,   vpi * 0.5],
+        [np.inf,     vpi / 2,   vpi * 2.0],
+    )
     popt, _ = curve_fit(
         lambda v, A, V0, Vpi: mode.fit_model(v, A, V0, Vpi),
-        vdc_fit, r_fit, p0=p0, maxfev=5000,
+        vdc_fit, r_fit, p0=p0, bounds=bounds, maxfev=10000,
     )
     A_fit, V0_fit, Vpi_fit = popt
     return FitResult(A=float(A_fit), V0=float(V0_fit), vpi_fit=float(Vpi_fit))
