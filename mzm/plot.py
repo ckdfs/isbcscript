@@ -140,7 +140,7 @@ def save_fit_plot(path: str,
     ax.scatter(xs_zoom, ys_zoom, s=18, color='royalblue', zorder=3,
                label='测量值  P1−P2 (dBm)')
     ax.plot(x_fine, db_fine, color='tomato', lw=2.0,
-            label=f'拟合曲线  20·log₁₀(A·|tan(·)|)')
+            label='拟合曲线')
     ax.axhline(r_target_db, color='green', ls='--', lw=1.5,
                label=f'R_target = {fit_result.r_target:.4f}  ({r_target_db:.2f} dB)')
     ax.axvline(centre - window, color='grey', ls=':', lw=1.0, label='拟合窗口边界')
