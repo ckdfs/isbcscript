@@ -14,7 +14,7 @@ import os
 
 from mzm.modes import MODES
 from mzm.hw import DG922Pro, FSV30
-from mzm import scan, fit, control, io
+from mzm import scan, fit, control, io, plot
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,6 +60,14 @@ def cmd_scan(mode, result_dir):
         rows=zip(actual_offsets, s1_arb, s2_arb),
     )
     log.info(f'Scan data saved to {result_dir}')
+
+    plot.save_scan_plot(
+        os.path.join(result_dir, 'scan.png'),
+        offsets1, s1_sin, s2_sin,
+        actual_offsets, s1_arb, s2_arb,
+        vpi_result, mode.name, vpi,
+    )
+    log.info('Scan plot saved → scan.png')
     return vpi
 
 
@@ -95,6 +103,13 @@ def cmd_fit(mode, result_dir):
         'vpi_fit':  result.vpi_fit,
         'vpi_scan': vpi,
     })
+
+    plot.save_fit_plot(
+        os.path.join(result_dir, 'fit.png'),
+        actual_offsets, s1_list, s2_list,
+        result, mode, mode.name, vpi,
+    )
+    log.info('Fit plot saved → fit.png')
     return result
 
 
@@ -114,20 +129,29 @@ def cmd_control(mode, result_dir):
         vpi = json.load(f)['vpi']
 
     fit_result = fit.FitResult(A=fd['A'], V0=fd['V0'], vpi_fit=fd['vpi_fit'])
+    log_path = os.path.join(result_dir, 'control_log.csv')
 
     log.info(f'Starting control loop  mode={mode.name}  R_target={fit_result.r_target:.4f}')
+    log.info('Press Ctrl+C to stop and save the control plot')
     with DG922Pro() as gen, FSV30() as sa:
         mode.configure_source(gen, vpi)
         scan.setup_analyzer(sa)
         try:
             control.pi_control_loop(gen, sa, mode, fit_result, vpi,
                                     measure_fn=scan.measure_markers,
-                                    log_path=os.path.join(result_dir, 'control_log.csv'))
+                                    log_path=log_path)
         except KeyboardInterrupt:
             log.info('Control loop stopped by user')
         finally:
             gen.output_off(1)
             sa.set_input_coupling('AC')
+
+    if os.path.exists(log_path):
+        plot.save_control_plot(
+            os.path.join(result_dir, 'control.png'),
+            log_path, fit_result.r_target, mode.name,
+        )
+        log.info('Control plot saved → control.png')
 
 
 def main():

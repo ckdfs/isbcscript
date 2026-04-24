@@ -15,6 +15,8 @@ R_target = A_fit  (empirical, from ratio_fit)
 
 import math
 
+import numpy as np
+
 from mzm.modes.base import ModeBase
 
 
@@ -35,8 +37,8 @@ class MaxQuadMode(ModeBase):
         shift = vpi / 4
         return [round(v + shift, 6) for v in base_offsets]
 
-    def fit_model(self, v: float, A: float, V0: float, vpi_fit: float) -> float:
-        return A * abs(math.tan(math.pi * (v - V0) / vpi_fit + math.pi / 4))
+    def fit_model(self, v, A: float, V0: float, vpi_fit: float):
+        return A * np.abs(np.tan(np.pi * (v - V0) / vpi_fit + np.pi / 4))
 
     def initial_offset(self, vpi: float, V0_fit: float) -> float:
         return vpi / 4 + V0_fit

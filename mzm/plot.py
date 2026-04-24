@@ -5,8 +5,10 @@ Public API:
     save_scan_plot(path, base_offsets, vpi_data, arb_data, vpi_result, mode_name)
 """
 
+import csv
 import math
 
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -46,7 +48,7 @@ def save_scan_plot(path: str,
 
     # Panel 1: 20 kHz
     ax1.plot(base_offsets, s1_sin, color='royalblue', lw=1.8, label='Sin 20 kHz')
-    ax1.plot(base_offsets, s1_arb, color='tomato', lw=1.8, ls='--', label='ARB 20 kHz')
+    ax1.plot(actual_offsets, s1_arb, color='tomato', lw=1.8, ls='--', label='ARB 20 kHz')
     if vpi_result:
         v1, v2, p1, p2 = vpi_result
         for xv in (v1, v2):
@@ -65,7 +67,7 @@ def save_scan_plot(path: str,
 
     # Panel 2: 40 kHz
     ax2.plot(base_offsets, s2_sin, color='royalblue', lw=1.8, label='Sin 40 kHz')
-    ax2.plot(base_offsets, s2_arb, color='tomato', lw=1.8, ls='--', label='ARB 40 kHz')
+    ax2.plot(actual_offsets, s2_arb, color='tomato', lw=1.8, ls='--', label='ARB 40 kHz')
     ax2.set_ylabel('功率 (dBm)')
     ax2.set_title('40 kHz 二阶导频功率')
     ax2.legend()
@@ -81,14 +83,97 @@ def save_scan_plot(path: str,
             p2_lin = 10 ** (b / 10)
             ratio.append((p1_lin / p2_lin) ** 0.5)
 
-    ax3.plot(base_offsets, ratio, color='tomato', lw=1.8, label='ARB  r = √(P1/P2)')
+    ax3.plot(actual_offsets, ratio, color='tomato', lw=1.8, label='ARB  r = √(P1/P2)')
     ax3.axhline(1.0, color='black', lw=0.6, ls=':')
-    ax3.set_xlabel('CH1 offset 基准 (V)')
+    ax3.set_xlabel('CH1 offset (V)')
     ax3.set_ylabel('幅度比 r')
     ax3.set_title('ARB 一/二阶幅度比')
     ax3.legend()
     ax3.grid(alpha=0.3)
-    ax3.set_xlim(base_offsets[0], base_offsets[-1])
+
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def save_fit_plot(path: str,
+                  actual_offsets: list,
+                  s1_arb: list, s2_arb: list,
+                  fit_result,
+                  mode,
+                  mode_name: str,
+                  vpi: float) -> None:
+    """Save ratio-curve fit overlay plot."""
+    ratio = []
+    for a, b in zip(s1_arb, s2_arb):
+        if math.isnan(a) or math.isnan(b):
+            ratio.append(math.nan)
+        else:
+            p1 = 10 ** (a / 10)
+            p2 = 10 ** (b / 10)
+            ratio.append((p1 / p2) ** 0.5)
+
+    x_fine = np.linspace(min(actual_offsets), max(actual_offsets), 600)
+    vdc_fine = x_fine - vpi / 4
+    r_fine = mode.fit_model(vdc_fine, fit_result.A, fit_result.V0, fit_result.vpi_fit)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.scatter(actual_offsets, ratio, s=14, color='royalblue', label='测量值', zorder=3)
+    ax.plot(x_fine, r_fine, color='tomato', lw=2.0, label='拟合曲线')
+    ax.axhline(fit_result.r_target, color='green', ls='--', lw=1.5,
+               label=f'R_target = {fit_result.r_target:.4f}')
+    ax.set_xlabel('CH1 offset (V)')
+    ax.set_ylabel('幅度比 r = √(P1/P2)')
+    ax.set_title(
+        f'比值曲线拟合 — {mode_name}\n'
+        f'A={fit_result.A:.4f}  V0={fit_result.V0:.4f} V  '
+        f'Vpi_fit={fit_result.vpi_fit:.4f} V'
+    )
+    ax.legend()
+    ax.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def save_control_plot(path: str, log_path: str,
+                      r_target: float, mode_name: str) -> None:
+    """Save three-panel control-loop result plot."""
+    times, rs, errors, offsets = [], [], [], []
+    with open(log_path, newline='', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            times.append(float(row['timestamp_s']))
+            rs.append(float(row['r']))
+            errors.append(float(row['error']))
+            offsets.append(float(row['offset_V']))
+
+    if not times:
+        return
+
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+    fig.suptitle(f'闭环控制过程 — {mode_name}', fontsize=12)
+
+    ax1.plot(times, rs, color='tomato', lw=1.5, label='r = √(P1/P2)')
+    ax1.axhline(r_target, color='black', ls='--', lw=1.5,
+                label=f'R_target = {r_target:.4f}')
+    ax1.set_ylabel('幅度比 r')
+    ax1.set_title('比值随时间变化')
+    ax1.legend()
+    ax1.grid(alpha=0.3)
+
+    ax2.plot(times, offsets, color='royalblue', lw=1.5, label='CH1 offset')
+    ax2.set_ylabel('CH1 offset (V)')
+    ax2.set_title('偏压随时间变化')
+    ax2.legend()
+    ax2.grid(alpha=0.3)
+
+    ax3.plot(times, errors, color='dimgray', lw=1.2, label='误差 e = r − R_target')
+    ax3.axhline(0, color='black', lw=0.8, ls=':')
+    ax3.set_xlabel('时间 (s)')
+    ax3.set_ylabel('误差')
+    ax3.set_title('控制误差随时间变化')
+    ax3.legend()
+    ax3.grid(alpha=0.3)
 
     plt.tight_layout(rect=[0, 0, 1, 0.97])
     plt.savefig(path, dpi=150)
