@@ -73,15 +73,28 @@ def setup_analyzer(sa) -> None:
     sa.marker_set_freq(cfg.FREQ_F2_HZ, marker=2)
 
 
-def measure_markers(sa) -> tuple:
-    """Single sweep + read both markers. Returns (s1_dbm, s2_dbm), NaN on timeout."""
-    sa.single_sweep()
-    ok = sa.wait_for_sweep(timeout_s=cfg.SWEEP_TIMEOUT_S)
-    if not ok:
-        return math.nan, math.nan
-    _, r1 = sa.marker_read(1)
-    _, r2 = sa.marker_read(2)
-    return r1 - cfg.POWER_OFFSET_DB, r2 - cfg.POWER_OFFSET_DB
+def measure_markers(sa, n_avg: int = None) -> tuple:
+    """Averaged sweep + read both markers. Returns (s1_dbm, s2_dbm), NaN on timeout.
+
+    n_avg sweeps are performed and the marker readings are averaged in linear
+    power (mW) before converting back to dBm.  Defaults to cfg.MEAS_AVG_N.
+    """
+    if n_avg is None:
+        n_avg = cfg.MEAS_AVG_N
+
+    p1_sum = p2_sum = 0.0
+    for _ in range(n_avg):
+        sa.single_sweep()
+        ok = sa.wait_for_sweep(timeout_s=cfg.SWEEP_TIMEOUT_S)
+        if not ok:
+            return math.nan, math.nan
+        _, r1 = sa.marker_read(1)
+        _, r2 = sa.marker_read(2)
+        p1_sum += 10 ** ((r1 - cfg.POWER_OFFSET_DB) / 10)   # dBm → mW
+        p2_sum += 10 ** ((r2 - cfg.POWER_OFFSET_DB) / 10)
+
+    return (10 * math.log10(p1_sum / n_avg),    # mW → dBm
+            10 * math.log10(p2_sum / n_avg))
 
 
 # ── Scans ─────────────────────────────────────────────────────────────────────

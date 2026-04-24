@@ -29,6 +29,7 @@ FREQ_F1_HZ      = 20e3     # Hz  marker 1: 1st harmonic of pilot
 FREQ_F2_HZ      = 40e3     # Hz  marker 2: 2nd harmonic of pilot
 POWER_OFFSET_DB = 6.0      # dB  FSV30 known calibration offset (reads ~6 dB high)
 SWEEP_TIMEOUT_S = 120      # s
+MEAS_AVG_N      = 3        # number of sweeps averaged per point (linear-power avg)
 
 # ── Fitting ───────────────────────────────────────────────────────────────────
 FIT_WINDOW_FRAC = 0.20     # fraction of Vpi; must be < 0.25 for max_quad (asymptote at Vpi/4)
