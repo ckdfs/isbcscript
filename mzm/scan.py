@@ -19,7 +19,7 @@ import config as cfg
 # ── Utilities ────────────────────────────────────────────────────────────────
 
 def make_offsets(start=cfg.OFFSET_START, stop=cfg.OFFSET_STOP,
-                 step=cfg.OFFSET_STEP) -> list:
+                 step=cfg.SCAN_STEP) -> list:
     n = round((stop - start) / step) + 1
     return [round(start + i * step, 6) for i in range(n)]
 
@@ -59,11 +59,15 @@ def find_two_valleys(xs, ys, min_sep_v=0.8):
 
 # ── FSV30 helpers ─────────────────────────────────────────────────────────────
 
-def setup_analyzer(sa) -> None:
-    """Apply standard FSV30 config for low-frequency pilot measurement."""
+def setup_analyzer(sa, rbw: float = None, vbw: float = None) -> None:
+    """Apply FSV30 config for low-frequency pilot measurement.
+
+    rbw / vbw — override bandwidth (Hz).  Defaults to cfg.SA_RBW_HZ / SA_VBW_HZ.
+    Pass cfg.SCAN_RBW_HZ for fast survey scans, omit for the control loop.
+    """
     sa.set_input_coupling('DC')
     sa.setup_frequency(cfg.SA_CENTER_HZ, cfg.SA_SPAN_HZ)
-    sa.setup_bandwidth(rbw=cfg.SA_RBW_HZ, vbw=cfg.SA_VBW_HZ)
+    sa.setup_bandwidth(rbw=rbw or cfg.SA_RBW_HZ, vbw=vbw or cfg.SA_VBW_HZ)
     sa.set_ref_level(cfg.SA_REF_LEV)
     sa.set_attenuation(auto=True)
     sa.set_sweep_time(auto=True)
@@ -114,7 +118,7 @@ def vpi_scan(gen, sa, base_offsets=None) -> tuple:
     gen.send(f':SOURce1:APPLy:SINusoid '
              f'{cfg.PILOT_FREQ_HZ:.6g},{cfg.PILOT_AMP_VPP:.6g},0,0')
     gen.output_on(1)
-    setup_analyzer(sa)
+    setup_analyzer(sa, rbw=cfg.SCAN_RBW_HZ, vbw=cfg.SCAN_VBW_HZ)
 
     sa.single_sweep()
     sa.wait_for_sweep(timeout_s=cfg.SWEEP_TIMEOUT_S)   # warmup sweep
@@ -122,7 +126,7 @@ def vpi_scan(gen, sa, base_offsets=None) -> tuple:
     s1, s2 = [], []
     for offset in base_offsets:
         gen.set_offset(1, offset)
-        time.sleep(cfg.SETTLE_S)
+        time.sleep(cfg.SCAN_SETTLE_S)
         p1, p2 = measure_markers(sa)
         s1.append(p1)
         s2.append(p2)
@@ -144,7 +148,7 @@ def bias_scan(gen, sa, mode, vpi: float, base_offsets=None) -> tuple:
 
     mode.configure_source(gen, vpi)
     actual_offsets = mode.sweep_offsets(base_offsets, vpi)
-    setup_analyzer(sa)
+    setup_analyzer(sa, rbw=cfg.SCAN_RBW_HZ, vbw=cfg.SCAN_VBW_HZ)
 
     sa.single_sweep()
     sa.wait_for_sweep(timeout_s=cfg.SWEEP_TIMEOUT_S)   # warmup sweep
@@ -152,7 +156,7 @@ def bias_scan(gen, sa, mode, vpi: float, base_offsets=None) -> tuple:
     s1, s2 = [], []
     for offset in actual_offsets:
         gen.set_offset(1, offset)
-        time.sleep(cfg.SETTLE_S)
+        time.sleep(cfg.SCAN_SETTLE_S)
         p1, p2 = measure_markers(sa)
         s1.append(p1)
         s2.append(p2)
