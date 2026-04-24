@@ -47,7 +47,7 @@ def configure_source(self, gen, vpi):
 
 ### `sweep_offsets(base_offsets, vpi)`
 
-将 `config.py` 中定义的基础 offset 序列（$[-6, +6]$ V，步进 50 mV）
+将 `config.py` 中定义的基础 offset 序列（$[-6, +6]$ V，步进 100 mV，`SCAN_STEP = 0.100 V`）
 转换为实际发送给 CH1 的 offset 序列。
 
 **约定**：
@@ -73,13 +73,21 @@ def sweep_offsets(self, base_offsets, vpi):
 - 返回值：幅度比 $r$（无量纲）
 
 **约定**：
-- 函数在拟合窗口（$|v - V_0| < V_\pi/3$）内必须单调
-- 使用 `abs()` 处理 `tan` 的符号问题
+- 函数在拟合窗口（$|v - V_0| < 0.20\,V_\pi$，即 `FIT_WINDOW_FRAC = 0.20`）内必须单调
+- 使用 `numpy.abs` / `numpy.tan`（`curve_fit` 传入 numpy 数组，`math.tan` 不支持）
+- max_quad 模式中 $r$ 随 $v$ 单调**递减**（因硬件偏压极性反向）
 
 **max_quad 示例**：
 ```python
+import numpy as np
+
 def fit_model(self, v, A, V0, vpi_fit):
-    return A * abs(math.tan(math.pi * (v - V0) / vpi_fit + math.pi / 4))
+    # r = A·|tan(π/4 − π(v−V0)/Vpi)|
+    # 在 vdc_eff 坐标系中单调递减：
+    #   左侧奇点（P2→0）：v = V0 − Vpi/4
+    #   中心目标点：v = V0，r = A (= R_target)
+    #   右侧零点（P1→0）：v = V0 + Vpi/4
+    return A * np.abs(np.tan(np.pi / 4 - np.pi * (v - V0) / vpi_fit))
 ```
 
 ---

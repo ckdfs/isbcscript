@@ -45,17 +45,24 @@ $$\boxed{r_{target} = \frac{J_1(m_{pilot})}{J_2(m_{pilot})} \cdot \tan\!\left(\f
 
 ## 4. 预期扫描曲线形状
 
-以 $V_{DC,eff} = \text{CH1 offset} - V_\pi/4$ 为横轴（在此坐标系中 $V_{DC,eff}=0$ 对应最大点）：
+以 $V_{DC,eff} = \text{CH1 offset} - V_\pi/4$ 为横轴（在此坐标系中 $V_{DC,eff}=0$ 对应最大点）。
 
-| 曲线 | 形状 | 零点 |
-|------|------|------|
-| $S_1$（20 kHz） | 正弦包络 | $V_{DC,eff} = \pm V_\pi/2, \pm 3V_\pi/2, \ldots$ |
-| $S_2$（40 kHz） | 余弦包络 | $V_{DC,eff} = 0, \pm V_\pi, \ldots$ |
-| $r = \sqrt{P_1/P_2}$ | $|\tan|$ 函数 | 同 $S_1$ 零点；奇点在 $S_2$ 零点 |
+> **极性说明**：实验中 CH1 offset 增大会使 MZM 偏置相位 $\phi_{DC}$ **减小**（硬件极性反向），
+> 因此比值曲线在 $V_{DC,eff}$ 轴上是单调**递减**的。
+
+| 曲线 | 形状 | 目标点附近关键位置 |
+|------|------|-------------------|
+| $S_1$（20 kHz） | $\|\sin(\phi_{DC}+\pi/4)\|$ 包络 | 最近零点在 $V_{DC,eff} = +V_\pi/4$（右侧，P1→0） |
+| $S_2$（40 kHz） | $\|\cos(\phi_{DC}+\pi/4)\|$ 包络 | 最近零点（奇点）在 $V_{DC,eff} = -V_\pi/4$（左侧，P2→0，r→∞） |
+| $r = \sqrt{P_1/P_2}$ | $|\tan|$ 函数，**单调递减** | 目标 $r=A$ 在中心（$V_{DC,eff}=0$）；左侧发散，右侧趋零 |
 
 与步骤一（无PWM，纯正弦）对比：
-- 曲线形状不变，整体幅度降低 $1/\sqrt{2}$（$-3\ \text{dB}$）
-- 坐标已对齐（`bias_scan` 将 offset 右移 $V_\pi/4$），零点位置相同
+- 整体幅度降低 $1/\sqrt{2}$（$-3\ \text{dB}$），由占空比 $A=0.5$ 决定
+- 坐标已对齐（`bias_scan` 将 offset 右移 $V_\pi/4$），目标工作点重合
+
+拟合使用的模型（与代码一致）：
+
+$$r(V_{DC,eff}) = A\cdot\left|\tan\!\left(\frac{\pi}{4} - \frac{\pi(V_{DC,eff}-V_0)}{V_\pi^{fit}}\right)\right|$$
 
 ---
 

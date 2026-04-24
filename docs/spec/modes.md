@@ -14,7 +14,7 @@
 | 占空比 $A$ | 0.5 |
 | $\phi_0$ | $\pi/4 = 45°$ |
 | $\kappa$ | $1/\sqrt{2}$（$-3\ \text{dB}$） |
-| 拟合模型 | $r = A\cdot\|\tan(\pi(v-V_0)/V_\pi^{fit} + \pi/4)\|$ |
+| 拟合模型 | $r = A\cdot\|\tan(\pi/4 - \pi(v-V_0)/V_\pi^{fit})\|$（随 $v$ 单调递减） |
 | $R_{target}$ | $A_{fit}$（拟合所得，理论值 $J_1/J_2$） |
 | CH1 模式 | ARB（预加载波形） |
 | ARB 幅度 | $V_\pi/2 + 0.8$ Vpp |

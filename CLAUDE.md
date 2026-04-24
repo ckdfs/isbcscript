@@ -55,6 +55,20 @@ docs/               — 文档（见下方文档地图）
 - **频率单位**：代码内统一用 Hz（不写 kHz/MHz 字面量）
 - **ARB模式参数公式**：`amp = Vpi/2 + 0.8`（Vpp），`offset = Vpi/4`（V）
 - **结果目录**：`io.make_result_dir(mode_name)` 创建，路径写入 `fit_result.json`
+- **fit_model 方向**：max_quad 模式中 `r` 随 `vdc_eff` 单调**递减**，公式为 `A·|tan(π/4 − π(v−V0)/Vpi)|`
+
+## Key Parameters（config.py）
+
+| 参数 | 值 | 作用 |
+|------|----|------|
+| `SCAN_STEP` | 0.100 V | 扫描步长（控制循环不用此值） |
+| `SCAN_SETTLE_S` | 0.050 s | 扫描每步稳定时间（快速，MZM响应远快于此） |
+| `SCAN_RBW_HZ` | 1000 Hz | 扫描用 RBW（宽带→速度快，噪底高约10 dB，可接受） |
+| `SCAN_VBW_HZ` | 1000 Hz | 扫描用 VBW |
+| `SA_RBW_HZ` | 300 Hz | 控制循环用 RBW（窄带→低噪底，精度高） |
+| `SA_VBW_HZ` | 300 Hz | 控制循环用 VBW |
+| `MEAS_AVG_N` | 1 | 每点线性平均次数（增大可降噪，但降速） |
+| `FIT_WINDOW_FRAC` | 0.20 | 拟合窗口 = 0.20×Vpi（必须 < 0.25，否则包含 asymptote） |
 
 ## Adding a New Mode（新增控制模式流程）
 
