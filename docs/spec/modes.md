@@ -26,17 +26,23 @@
 
 ## quad_pm — 正/负正交点切换
 
-> 待填充。
-
 | 字段 | 值 |
 |------|----|
 | `name` | `'quad_pm'` |
-| 状态A | ? |
-| 状态B | ? |
-| 占空比 $A$ | ? |
-| $\phi_0$ | ? |
-| 拟合模型 | ? |
-| CH1 模式 | ? |
+| 状态A | $\phi_{DC} + \pi$（负正交点，方波HIGH，sin导频） |
+| 状态B | $\phi_{DC}$（正正交点，方波LOW，cos导频） |
+| 占空比 $A$ | 0.5 |
+| $\kappa$ | $1/\sqrt{2}$（−3 dB，仅作用于 $S_1$） |
+| f₂ 两态 | **同号叠加**（不抵消），$S_2 \propto 2J_2\vert\cos\phi_{DC}\vert$ |
+| 比值函数 | $r = \kappa(J_1/J_2)\vert\tan\phi_{DC}\vert$ |
+| 拟合模型 | $r = A\cdot\|\tan(\pi/4 - \pi(v-V_0)/V_\pi^{fit})\|$（同 max_quad） |
+| $R_{target}$ | $A_{fit}$（拟合所得，理论值 $\kappa J_1/J_2 \approx 12$，~21.6 dB） |
+| CH1 模式 | ARB（代码生成并上传波形） |
+| ARB 波形 | 16,384 点，200kHz 方波（0V↔5.4V）+ sin/cos 导频 |
+| ARB 幅度 | 6.2 Vpp（固定，波形范围 −0.4 ~ 5.8 V） |
+| ARB 偏置 | 2.7 V（波形 DC 中心） |
+| `initial_offset` | $V_\pi/4 + V_0$ |
+| `sweep_offsets` | base + $V_\pi/4$ |
 
 ---
 
