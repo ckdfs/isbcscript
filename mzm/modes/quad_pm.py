@@ -27,7 +27,8 @@ from mzm.modes.base import ModeBase
 class QuadPMMode(ModeBase):
     name             = 'quad_pm'
     description      = '正/负正交点切换  (A=0.5, sin/cos导频, κ=1/√2)'
-    control_strategy = 's2_min'   # minimise S₂ (40 kHz) → lock to quadrature
+    control_strategy = 's2_min'   # gradient descent on S₂ → lock to quadrature points
+    use_curve_fit    = False      # vdc_eff=0 is asymptote → curve_fit unreliable
 
     def vdc_ref(self, vpi: float) -> float:
         return vpi / 2

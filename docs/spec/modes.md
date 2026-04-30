@@ -31,29 +31,31 @@
 | 字段 | 值 |
 |------|----|
 | `name` | `'quad_pm'` |
-| `control_strategy` | **`'s2_min'`**（S₂ 梯度下降） |
+| `control_strategy` | **`'s2_min'`**（自适应探针梯度下降） |
+| `use_curve_fit` | **`False`**（渐近线在拟合窗口内，curve_fit 不可靠） |
 | 状态A | $\phi_{DC} + \pi$（负正交点，方波HIGH，sin导频） |
 | 状态B | $\phi_{DC}$（正正交点，方波LOW，cos导频） |
 | 占空比 $A$ | 0.5 |
 | $\kappa$ | $1/\sqrt{2}$（−3 dB，仅作用于 $S_1$） |
 | f₂ 两态 | **同号叠加**（不抵消），$S_2 \propto 2J_2\vert\cos\phi_{DC}\vert$ |
-| 比值函数 | $r = \kappa(J_1/J_2)\vert\tan\phi_{DC}\vert$ |
-| 拟合模型 | $r = A\cdot\|\tan(\pi/4 - \pi(v-V_0)/V_\pi^{fit})\|$（形式同 max_quad） |
 | 控制信号 | **$S_2$（40 kHz）→ min**，$S_2\propto\vert\cos\phi_{DC}\vert$，谷底即目标 |
+| 探针步长 | **自适应** 0.02–0.10 V（$= \max(0.02, \min(0.10, \mathrm{excess\_dB}/50))$） |
+| 步长缩放 | 0.003 V/dB（$\mathrm{step} = 0.003 \times \mathrm{excess\_dB}$） |
 | CH1 模式 | ARB（预加载波形） |
 | ARB 波形 | 16,384 点，200kHz 方波（0V↔5.4V）+ sin/cos 导频 |
 | ARB 幅度 | **6.2 Vpp**（固定，波形范围 −0.4 ~ 5.8 V） |
-| `vdc_ref` | **$V_\pi/2$** V（S₂ 谷底位置） |
-| `initial_offset` | $V_\pi/2$（或谷底 offset，由 quick_estimate 设定） |
+| `vdc_ref` | **$V_\pi/2$** V（S₂ 谷底位置，两正交点电气中点） |
+| `initial_offset` | 谷底 offset（由 quick_estimate 从扫描数据确定） |
 | `sweep_offsets` | base + $V_\pi/2$ |
 | `offset_limits` | $[\max(-6.9, -V_\pi/2),\; \min(6.9, 3V_\pi/2)]$ |
 
-> **控制策略说明**：quad_pm 的 `vdc_ref = Vpi/2` 恰好位于 S₂ 渐近线（$P_2\to 0$），
-> 比值 $r$ 在此处发散，curve_fit 不可靠。因此改用 S₂ 梯度下降：直接追踪 S₂ 的最小值，
-> 该最小值对应的偏置点就是正/负正交点切换的平衡位置。
+> **控制策略说明**：quad_pm 的目标是两态分别在正/负正交点（$\phi=\pm\pi/2$），
+> 此时 $S_2\propto\vert\cos\phi\vert=0$。控制回路用自适应探针判断 $S_2$ 梯度方向，
+> 步长与 $S_2$ 距谷底的距离成正比。远离谷底时探针自动放大（0.10 V），
+> 靠近时缩小（0.02 V），兼顾收敛速度和精度。
 > 
-> `--step fit` 和 `--step scan-control` 均自动使用 quick_estimate（从扫描数据找 S₂ 谷底），
-> 跳过 curve_fit。
+> `vdc_ref = Vpi/2` 恰好位于 $S_2$ 渐近线，比值 $r$ 在此发散，因此
+> `use_curve_fit = False`，`--step fit` 自动跳过 curve_fit 改用 quick_estimate。
 
 ---
 

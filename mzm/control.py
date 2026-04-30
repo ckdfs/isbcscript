@@ -67,12 +67,13 @@ def pi_control_loop(gen, sa, mode, fit_result: FitResult, vpi: float,
 def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
                         measure_fn, log_path: str = None,
                         V_start: float = None,
-                        probe_v: float = 0.02,
                         step_scale: float = 0.003) -> None:
     """Gradient-descent control: minimise S₂ (40 kHz power).
 
-    Probes +probe_v V to determine gradient direction, then steps toward
-    lower S₂.  Step size scales with how far S₂ is above the valley floor.
+    Probes positive to determine gradient direction with an adaptive step
+    (0.02–0.10 V, scaled by how far S₂ is above the valley floor).
+    Step size also scales with S₂ excess to converge faster when far.
+
     Designed for quad_pm where the S₂ valley = target operating point.
 
     gen          — DG922Pro instance
@@ -83,7 +84,6 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
     measure_fn   — callable(sa) → (s1_dbm, s2_dbm)
     log_path     — path for control_log.csv
     V_start      — initial CH1 offset (default: mode.initial_offset)
-    probe_v      — voltage probe step for direction sensing (V)
     step_scale   — step scaling (V / dB); larger → more aggressive
     """
     offset_min, offset_max = mode.offset_limits(vpi)
@@ -91,14 +91,15 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
     t0 = time.time()
 
     log.info(f'S₂-min control  V_start={V_offset:.4f} V  S₂_floor≈{s2_min_dbm:.1f} dBm'
-             f'  probe={probe_v:.3f} V  limits=[{offset_min:.1f}, {offset_max:.1f}] V')
+             f'  probe=adaptive(0.02–0.10 V)'
+             f'  limits=[{offset_min:.1f}, {offset_max:.1f}] V')
 
     _csv_file = open(log_path, 'w', newline='', encoding='utf-8') if log_path else None
     _writer = None
     if _csv_file:
         _writer = csv.writer(_csv_file)
         _writer.writerow(['timestamp_s', 's1_dbm', 's2_dbm', 'dir',
-                          'step_V', 'offset_V'])
+                          'probe_V', 'step_V', 'offset_V'])
 
     try:
         while True:
@@ -107,6 +108,11 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
             if math.isnan(s1) or math.isnan(s2):
                 log.warning('NaN measurement — skipping update')
                 continue
+
+            excess_db = max(0.0, s2 - s2_min_dbm)
+
+            # adaptive probe: large when far (gradient small), small when near
+            probe_v = max(0.02, min(0.10, excess_db / 50.0))
 
             # probe: step positive, measure again
             V_probe = min(offset_max, V_offset + probe_v)
@@ -118,7 +124,6 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
             going_down = (s2_probe < s2)
 
             # step size proportional to how far above the valley floor we are
-            excess_db = max(0.0, s2 - s2_min_dbm)
             step = step_scale * excess_db
             if step < 0.002:
                 step = 0.0   # dead-band: close enough to the floor
@@ -134,11 +139,13 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
             t = time.time() - t0
             direction = '→' if going_down else '←'
             log.info(f't={t:7.1f}s  s1={s1:7.2f}  s2={s2:7.2f}  '
-                     f'dir={direction}  step={step:+.4f} V  Vdc={V_offset:.4f} V')
+                     f'dir={direction}  probe={probe_v:.3f}  '
+                     f'step={step:+.4f} V  Vdc={V_offset:.4f} V')
 
             if _writer:
                 _writer.writerow([f'{t:.3f}', f'{s1:.3f}', f'{s2:.3f}',
-                                  direction, f'{step:.5f}', f'{V_offset:.5f}'])
+                                  direction, f'{probe_v:.4f}',
+                                  f'{step:.5f}', f'{V_offset:.5f}'])
                 _csv_file.flush()
     finally:
         if _csv_file:

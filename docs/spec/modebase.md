@@ -151,11 +151,24 @@ def offset_limits(self, vpi):
 | 值 | 控制方式 | 适用模式 |
 |----|---------|---------|
 | `'ratio'` | PI 积分控制，追 $r = R_{target}$ | max_quad |
-| `'s2_min'` | 梯度下降，最小化 $S_2$ (40kHz) | quad_pm |
+| `'s2_min'` | 自适应探针梯度下降，最小化 $S_2$ (40kHz) | quad_pm |
 
 对应 `control.py` 中两个不同的控制回路函数：
 - `'ratio'` → `pi_control_loop()`
-- `'s2_min'` → `s2_min_control_loop()`
+- `'s2_min'` → `s2_min_control_loop()`（自适应探针 0.02–0.10 V）
+
+
+### `use_curve_fit: bool`
+
+是否在 `--step fit` 阶段使用 `scipy.optimize.curve_fit`（类属性，非方法）。
+
+| 值 | 行为 |
+|----|------|
+| `True`（默认） | 正常运行 curve_fit |
+| `False` | 跳过 curve_fit，改用 `cmd_quick_estimate` 从扫描数据直接估算 |
+
+quad_pm 设为 `False`：其 `vdc_ref = Vpi/2` 恰好位于 $S_2$ 渐近线（$P_2\to 0$），
+比值 $r$ 在此处发散，curve_fit 初始猜测巨大导致拟合不可靠。
 
 ---
 

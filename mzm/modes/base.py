@@ -39,6 +39,7 @@ class ModeBase(ABC):
     # ── control strategy ────────────────────────────────────────────────────────
 
     control_strategy: str = 'ratio'   # 'ratio' (PI on r) or 's2_min' (gradient descent on S₂)
+    use_curve_fit: bool = True        # False → --step fit falls back to quick_estimate
 
     # ── concrete (override when needed) ─────────────────────────────────────────
 

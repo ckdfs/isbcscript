@@ -90,8 +90,8 @@ def cmd_fit(mode, result_dir):
     """
     import csv, json
 
-    if mode.control_strategy == 's2_min':
-        log.info('Curve fit skipped for s2_min mode — using quick estimate instead')
+    if not mode.use_curve_fit:
+        log.info('Curve fit disabled for this mode — using quick estimate instead')
         return cmd_quick_estimate(mode, result_dir)
 
     vpi_path = os.path.join(result_dir, 'vpi.json')
