@@ -24,8 +24,8 @@ SETTLE_S        =  0.15    # s   control-loop settle time
 # 修改此处即可调节扫描速度，不影响控制环路设置。
 SCAN_STEP       =  0.100   # V   扫描步长（→ 121 点，是 0.05V 的一半）
 SCAN_SETTLE_S   =  0.050   # s   MZM 响应 << 1 ms，50 ms 已十分保守
-SCAN_RBW_HZ     =  1000    # Hz  宽 RBW → 扫描速度约快 3×（噪底升 ~10 dB，可接受）
-SCAN_VBW_HZ     =  1000    # Hz
+SCAN_RBW_HZ     =  100     # Hz  窄 RBW → 低噪底，扫描时间增加
+SCAN_VBW_HZ     =  100     # Hz
 
 # ── FSV30 measurement window ─────────────────────────────────────────────────
 SA_CENTER_HZ    = 30e3     # Hz  covers 10–50 kHz

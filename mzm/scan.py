@@ -10,10 +10,13 @@ Public API:
     find_two_valleys(xs, ys) → (v1, v2, p1, p2) | None
 """
 
+import logging
 import math
 import time
 
 import config as cfg
+
+log = logging.getLogger(__name__)
 
 
 # ── Utilities ────────────────────────────────────────────────────────────────
@@ -115,6 +118,12 @@ def vpi_scan(gen, sa, base_offsets=None) -> tuple:
     if base_offsets is None:
         base_offsets = make_offsets()
 
+    n_pts = len(base_offsets)
+    step_v = abs(base_offsets[1] - base_offsets[0]) if n_pts > 1 else 0
+    log.info('Vpi scan: %d pts  %.3f→%.3f V  step=%.3f V  settle=%.0f ms  RBW=%d Hz',
+             n_pts, base_offsets[0], base_offsets[-1], step_v,
+             cfg.SCAN_SETTLE_S * 1000, cfg.SCAN_RBW_HZ)
+
     gen.send(f':SOURce1:APPLy:SINusoid '
              f'{cfg.PILOT_FREQ_HZ:.6g},{cfg.PILOT_AMP_VPP:.6g},0,0')
     gen.output_on(1)
@@ -123,15 +132,23 @@ def vpi_scan(gen, sa, base_offsets=None) -> tuple:
     sa.single_sweep()
     sa.wait_for_sweep(timeout_s=cfg.SWEEP_TIMEOUT_S)   # warmup sweep
 
+    t0 = time.time()
+    report_every = max(1, n_pts // 10)
     s1, s2 = [], []
-    for offset in base_offsets:
+    for i, offset in enumerate(base_offsets):
         gen.set_offset(1, offset)
         time.sleep(cfg.SCAN_SETTLE_S)
         p1, p2 = measure_markers(sa)
         s1.append(p1)
         s2.append(p2)
+        if (i + 1) % report_every == 0 or i == n_pts - 1:
+            elapsed = time.time() - t0
+            eta = elapsed / (i + 1) * (n_pts - i - 1)
+            log.info('  [%3d/%d]  offset=%+7.3f V  s1=%7.2f  s2=%7.2f dBm  elapsed=%.0fs  eta=%.0fs',
+                     i + 1, n_pts, offset, p1, p2, elapsed, eta)
 
     gen.output_off(1)
+    log.info('Vpi scan done: %d pts in %.0f s', n_pts, time.time() - t0)
     return base_offsets, s1, s2, find_two_valleys(base_offsets, s1)
 
 
@@ -150,16 +167,29 @@ def bias_scan(gen, sa, mode, vpi: float, base_offsets=None) -> tuple:
     actual_offsets = mode.sweep_offsets(base_offsets, vpi)
     setup_analyzer(sa, rbw=cfg.SCAN_RBW_HZ, vbw=cfg.SCAN_VBW_HZ)
 
+    n_pts = len(actual_offsets)
+    log.info('ARB scan: %d pts  %.3f→%.3f V  settle=%.0f ms  RBW=%d Hz',
+             n_pts, actual_offsets[0], actual_offsets[-1],
+             cfg.SCAN_SETTLE_S * 1000, cfg.SCAN_RBW_HZ)
+
     sa.single_sweep()
     sa.wait_for_sweep(timeout_s=cfg.SWEEP_TIMEOUT_S)   # warmup sweep
 
+    t0 = time.time()
+    report_every = max(1, n_pts // 10)
     s1, s2 = [], []
-    for offset in actual_offsets:
+    for i, offset in enumerate(actual_offsets):
         gen.set_offset(1, offset)
         time.sleep(cfg.SCAN_SETTLE_S)
         p1, p2 = measure_markers(sa)
         s1.append(p1)
         s2.append(p2)
+        if (i + 1) % report_every == 0 or i == n_pts - 1:
+            elapsed = time.time() - t0
+            eta = elapsed / (i + 1) * (n_pts - i - 1)
+            log.info('  [%3d/%d]  offset=%+7.3f V  s1=%7.2f  s2=%7.2f dBm  elapsed=%.0fs  eta=%.0fs',
+                     i + 1, n_pts, offset, p1, p2, elapsed, eta)
 
     gen.output_off(1)
+    log.info('ARB scan done: %d pts in %.0f s', n_pts, time.time() - t0)
     return actual_offsets, s1, s2
