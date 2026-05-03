@@ -40,7 +40,7 @@ class QuadPMMode(ModeBase):
         hw_hi =  6.9
         hw_lo = -6.9
         center = self.vdc_ref(vpi)
-        return (max(hw_lo, center - vpi), min(hw_hi, center + vpi))
+        return (max(hw_lo, center - 2 * vpi), min(hw_hi, center + vpi))
 
     def configure_source(self, gen, vpi: float) -> None:
         gen.send(':SOURce1:FUNCtion ARB')

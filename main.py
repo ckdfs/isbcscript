@@ -164,8 +164,21 @@ def cmd_quick_estimate(mode, result_dir):
             s1_list.append(float(row['s1_dbm']))
             s2_list.append(float(row['s2_dbm']))
 
-    # find deepest s2 valley
-    valley_idx = min(range(len(s2_list)), key=lambda i: s2_list[i])
+    # find s2 valley closest to vdc_ref, not just the deepest globally.
+    # (both s2 valleys are physically equivalent — same operating point.)
+    ref = mode.vdc_ref(vpi)
+    # identify all local minima that are at least 10 dB below median
+    median_s2 = sorted(s2_list)[len(s2_list) // 2]
+    candidates = []
+    for i in range(1, len(s2_list) - 1):
+        if s2_list[i] < s2_list[i - 1] and s2_list[i] < s2_list[i + 1]:
+            if s2_list[i] < median_s2 - 10:
+                dist = abs(actual_offsets[i] - ref)
+                candidates.append((dist, i))
+    if candidates:
+        valley_idx = min(candidates)[1]  # closest to vdc_ref
+    else:
+        valley_idx = min(range(len(s2_list)), key=lambda i: s2_list[i])
     v_valley = actual_offsets[valley_idx]
     s2_valley = s2_list[valley_idx]
 

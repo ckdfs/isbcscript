@@ -67,7 +67,7 @@ def pi_control_loop(gen, sa, mode, fit_result: FitResult, vpi: float,
 def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
                         measure_fn, log_path: str = None,
                         V_start: float = None,
-                        step_scale: float = 0.003) -> None:
+                        step_scale: float = 0.001) -> None:
     """Gradient-descent control: minimise S₂ (40 kHz power).
 
     Probes positive to determine gradient direction with an adaptive step

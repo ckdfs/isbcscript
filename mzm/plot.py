@@ -163,13 +163,16 @@ def save_fit_plot(path: str,
 
 def save_control_plot(path: str, log_path: str,
                       r_target: float, mode_name: str) -> None:
-    """Save three-panel control-loop result plot."""
-    times, rs, errors, offsets = [], [], [], []
+    """Save three-panel control-loop result plot.
+
+    Auto-detects CSV format: ratio (r, error columns) or s2_min (dir, probe_V columns).
+    """
+    times, offsets = [], []
     with open(log_path, newline='', encoding='utf-8') as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        columns = reader.fieldnames or []
+        for row in reader:
             times.append(float(row['timestamp_s']))
-            rs.append(float(row['r']))
-            errors.append(float(row['error']))
             offsets.append(float(row['offset_V']))
 
     if not times:
@@ -178,27 +181,59 @@ def save_control_plot(path: str, log_path: str,
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
     fig.suptitle(f'闭环控制过程 — {mode_name}', fontsize=12)
 
-    ax1.plot(times, rs, color='tomato', lw=1.5, label='r = √(P1/P2)')
-    ax1.axhline(r_target, color='black', ls='--', lw=1.5,
-                label=f'R_target = {r_target:.4f}')
-    ax1.set_ylabel('幅度比 r')
-    ax1.set_title('比值随时间变化')
-    ax1.legend()
-    ax1.grid(alpha=0.3)
+    if 'r' in columns:
+        # ── ratio-mode plot ──────────────────────────────────────────────────
+        with open(log_path, newline='', encoding='utf-8') as f:
+            rows = list(csv.DictReader(f))
+        rs = [float(r['r']) for r in rows]
+        errors = [float(r['error']) for r in rows]
 
-    ax2.plot(times, offsets, color='royalblue', lw=1.5, label='CH1 offset')
-    ax2.set_ylabel('CH1 offset (V)')
-    ax2.set_title('偏压随时间变化')
-    ax2.legend()
-    ax2.grid(alpha=0.3)
+        ax1.plot(times, rs, color='tomato', lw=1.5, label='r = √(P1/P2)')
+        ax1.axhline(r_target, color='black', ls='--', lw=1.5,
+                    label=f'R_target = {r_target:.4f}')
+        ax1.set_ylabel('r')
+        ax1.set_title('比值随时间变化')
+        ax1.legend()
+        ax1.grid(alpha=0.3)
 
-    ax3.plot(times, errors, color='dimgray', lw=1.2, label='误差 e = r − R_target')
-    ax3.axhline(0, color='black', lw=0.8, ls=':')
-    ax3.set_xlabel('时间 (s)')
-    ax3.set_ylabel('误差')
-    ax3.set_title('控制误差随时间变化')
-    ax3.legend()
-    ax3.grid(alpha=0.3)
+        ax2.plot(times, offsets, color='royalblue', lw=1.5, label='CH1 offset')
+        ax2.set_ylabel('CH1 offset (V)')
+        ax2.set_title('偏压随时间变化')
+        ax2.legend()
+        ax2.grid(alpha=0.3)
+
+        ax3.plot(times, errors, color='dimgray', lw=1.2, label='e = r − R_target')
+        ax3.axhline(0, color='black', lw=0.8, ls=':')
+        ax3.set_ylabel('误差')
+        ax3.set_title('控制误差随时间变化')
+        ax3.legend()
+        ax3.grid(alpha=0.3)
+    else:
+        # ── s2-min plot ──────────────────────────────────────────────────────
+        with open(log_path, newline='', encoding='utf-8') as f:
+            rows = list(csv.DictReader(f))
+        s2s = [float(r['s2_dbm']) for r in rows]
+        steps = [float(r['step_V']) for r in rows]
+        probes = [float(r.get('probe_V', 0)) for r in rows]
+
+        ax1.plot(times, s2s, color='steelblue', lw=1.2, label='S2 (40 kHz)')
+        ax1.set_ylabel('S2 (dBm)')
+        ax1.set_title('S2 功率随时间变化')
+        ax1.legend()
+        ax1.grid(alpha=0.3)
+
+        ax2.plot(times, offsets, color='royalblue', lw=1.5, label='CH1 offset')
+        ax2.set_ylabel('CH1 offset (V)')
+        ax2.set_title('偏压随时间变化')
+        ax2.legend()
+        ax2.grid(alpha=0.3)
+
+        ax3.plot(times, steps, color='dimgray', lw=1.2, label='步长')
+        ax3.set_ylabel('步长 (V)')
+        ax3.set_xlabel('时间 (s)')
+        ax3.set_title('控制步长随时间变化')
+        ax3.legend()
+        ax3.grid(alpha=0.3)
 
     plt.tight_layout(rect=[0, 0, 1, 0.97])
     plt.savefig(path, dpi=150)

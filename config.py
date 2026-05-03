@@ -30,8 +30,8 @@ SCAN_VBW_HZ     =  100     # Hz
 # ── FSV30 measurement window ─────────────────────────────────────────────────
 SA_CENTER_HZ    = 30e3     # Hz  covers 10–50 kHz
 SA_SPAN_HZ      = 40e3     # Hz
-SA_RBW_HZ       = 300      # Hz
-SA_VBW_HZ       = 300      # Hz
+SA_RBW_HZ       = 100      # Hz  窄 RBW → 低噪底，适合控制回路
+SA_VBW_HZ       = 100      # Hz
 SA_REF_LEV      = 0        # dBm
 FREQ_F1_HZ      = 20e3     # Hz  marker 1: 1st harmonic of pilot
 FREQ_F2_HZ      = 40e3     # Hz  marker 2: 2nd harmonic of pilot
