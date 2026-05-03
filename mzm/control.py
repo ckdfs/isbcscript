@@ -4,6 +4,8 @@ PI / gradient control loops — Step 4.
 Public API:
     pi_control_loop(gen, sa, mode, fit_result, vpi, measure_fn, log_path)
     s2_min_control_loop(gen, sa, mode, vpi, s2_min_dbm, measure_fn, log_path)
+    signal_min_control_loop(gen, sa, mode, vpi, min_dbm, measure_fn, log_path,
+                            V_start, step_scale, signal_index)
 """
 
 import csv
@@ -64,33 +66,35 @@ def pi_control_loop(gen, sa, mode, fit_result: FitResult, vpi: float,
             _csv_file.close()
 
 
-def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
-                        measure_fn, log_path: str = None,
-                        V_start: float = None,
-                        step_scale: float = 0.001) -> None:
-    """Gradient-descent control: minimise S₂ (40 kHz power).
+def signal_min_control_loop(gen, sa, mode, vpi: float, min_dbm: float,
+                             measure_fn, log_path: str = None,
+                             V_start: float = None,
+                             step_scale: float = 0.001,
+                             signal_index: int = 2) -> None:
+    """Gradient-descent control: minimise S₁ (signal_index=1) or S₂ (signal_index=2).
 
     Probes positive to determine gradient direction with an adaptive step
-    (0.02–0.10 V, scaled by how far S₂ is above the valley floor).
-    Step size also scales with S₂ excess to converge faster when far.
+    (0.02–0.10 V, scaled by how far the signal is above the valley floor).
+    Step size also scales with excess to converge faster when far.
 
-    Designed for quad_pm where the S₂ valley = target operating point.
-
-    gen          — DG922Pro instance
-    sa           — FSV30 instance
-    mode         — ModeBase instance
-    vpi          — Vpi from vpi_scan (V)
-    s2_min_dbm   — S₂ floor estimate from scan (dBm), for reference only
-    measure_fn   — callable(sa) → (s1_dbm, s2_dbm)
-    log_path     — path for control_log.csv
-    V_start      — initial CH1 offset (default: mode.initial_offset)
-    step_scale   — step scaling (V / dB); larger → more aggressive
+    gen           — DG922Pro instance
+    sa            — FSV30 instance
+    mode          — ModeBase instance
+    vpi           — Vpi from vpi_scan (V)
+    min_dbm       — valley floor estimate from scan (dBm)
+    measure_fn    — callable(sa) → (s1_dbm, s2_dbm)
+    log_path      — path for control_log.csv
+    V_start       — initial CH1 offset (default: mode.initial_offset)
+    step_scale    — step scaling (V / dB); larger → more aggressive
+    signal_index  — 1 for S₁-min (max_min), 2 for S₂-min (quad_pm)
     """
     offset_min, offset_max = mode.offset_limits(vpi)
     V_offset = V_start if V_start is not None else mode.initial_offset(vpi, 0.0)
     t0 = time.time()
+    signal_label = f'S{signal_index}'
 
-    log.info(f'S₂-min control  V_start={V_offset:.4f} V  S₂_floor≈{s2_min_dbm:.1f} dBm'
+    log.info(f'{signal_label}-min control  V_start={V_offset:.4f} V  '
+             f'{signal_label}_floor≈{min_dbm:.1f} dBm'
              f'  probe=adaptive(0.02–0.10 V)'
              f'  limits=[{offset_min:.1f}, {offset_max:.1f}] V')
 
@@ -109,7 +113,10 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
                 log.warning('NaN measurement — skipping update')
                 continue
 
-            excess_db = max(0.0, s2 - s2_min_dbm)
+            # select the signal being minimised
+            signal_val = s1 if signal_index == 1 else s2
+
+            excess_db = max(0.0, signal_val - min_dbm)
 
             # adaptive probe: large when far (gradient small), small when near
             probe_v = max(0.02, min(0.10, excess_db / 50.0))
@@ -117,11 +124,12 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
             # probe: step positive, measure again
             V_probe = min(offset_max, V_offset + probe_v)
             gen.set_offset(1, V_probe)
-            _, s2_probe = measure_fn(sa)
+            s1_probe, s2_probe = measure_fn(sa)
+            signal_probe = s1_probe if signal_index == 1 else s2_probe
             gen.set_offset(1, V_offset)  # restore
 
-            # direction: did S₂ decrease (toward valley) or increase?
-            going_down = (s2_probe < s2)
+            # direction: did the signal decrease (toward valley) or increase?
+            going_down = (signal_probe < signal_val)
 
             # step size proportional to how far above the valley floor we are
             step = step_scale * excess_db
@@ -129,9 +137,9 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
                 step = 0.0   # dead-band: close enough to the floor
 
             if going_down:
-                V_offset += step          # keep going positive → lower S₂
+                V_offset += step          # keep going positive → lower signal
             else:
-                V_offset -= step          # reverse: go negative → lower S₂
+                V_offset -= step          # reverse: go negative → lower signal
 
             V_offset = max(offset_min, min(offset_max, V_offset))
             gen.set_offset(1, V_offset)
@@ -150,3 +158,13 @@ def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
     finally:
         if _csv_file:
             _csv_file.close()
+
+
+def s2_min_control_loop(gen, sa, mode, vpi: float, s2_min_dbm: float,
+                        measure_fn, log_path: str = None,
+                        V_start: float = None,
+                        step_scale: float = 0.001) -> None:
+    """Backward-compatible wrapper: minimises S₂ via signal_min_control_loop."""
+    return signal_min_control_loop(gen, sa, mode, vpi, s2_min_dbm,
+                                   measure_fn, log_path, V_start,
+                                   step_scale, signal_index=2)

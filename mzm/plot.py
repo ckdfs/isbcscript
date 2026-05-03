@@ -162,10 +162,12 @@ def save_fit_plot(path: str,
 
 
 def save_control_plot(path: str, log_path: str,
-                      r_target: float, mode_name: str) -> None:
+                      r_target: float, mode_name: str,
+                      signal_index: int = 2) -> None:
     """Save three-panel control-loop result plot.
 
-    Auto-detects CSV format: ratio (r, error columns) or s2_min (dir, probe_V columns).
+    Auto-detects CSV format: ratio (r, error columns) or gradient-descent
+    (dir, probe_V columns).  signal_index=1 draws S1, signal_index=2 draws S2.
     """
     times, offsets = [], []
     with open(log_path, newline='', encoding='utf-8') as f:
@@ -209,16 +211,20 @@ def save_control_plot(path: str, log_path: str,
         ax3.legend()
         ax3.grid(alpha=0.3)
     else:
-        # ── s2-min plot ──────────────────────────────────────────────────────
+        # ── gradient-descent plot (s1_min or s2_min) ──────────────────────────
         with open(log_path, newline='', encoding='utf-8') as f:
             rows = list(csv.DictReader(f))
+        s1s = [float(r['s1_dbm']) for r in rows]
         s2s = [float(r['s2_dbm']) for r in rows]
         steps = [float(r['step_V']) for r in rows]
         probes = [float(r.get('probe_V', 0)) for r in rows]
 
-        ax1.plot(times, s2s, color='steelblue', lw=1.2, label='S2 (40 kHz)')
-        ax1.set_ylabel('S2 (dBm)')
-        ax1.set_title('S2 功率随时间变化')
+        signal = s1s if signal_index == 1 else s2s
+        signal_label = 'S1 (20 kHz)' if signal_index == 1 else 'S2 (40 kHz)'
+
+        ax1.plot(times, signal, color='steelblue', lw=1.2, label=signal_label)
+        ax1.set_ylabel(f'{signal_label} (dBm)')
+        ax1.set_title(f'{signal_label} 功率随时间变化')
         ax1.legend()
         ax1.grid(alpha=0.3)
 

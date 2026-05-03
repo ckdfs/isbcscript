@@ -152,10 +152,14 @@ def offset_limits(self, vpi):
 |----|---------|---------|
 | `'ratio'` | PI 积分控制，追 $r = R_{target}$ | max_quad |
 | `'s2_min'` | 自适应探针梯度下降，最小化 $S_2$ (40kHz) | quad_pm |
+| `'s1_min'` | 自适应探针梯度下降，最小化 $S_1$ (20kHz) | max_min |
 
-对应 `control.py` 中两个不同的控制回路函数：
+对应 `control.py` 中的控制回路函数：
 - `'ratio'` → `pi_control_loop()`
-- `'s2_min'` → `s2_min_control_loop()`（自适应探针 0.02–0.10 V）
+- `'s2_min'` → `s2_min_control_loop()`（自适应探针 0.02–0.10 V，wrapper）
+- `'s1_min'` → `signal_min_control_loop(signal_index=1)`（自适应探针 0.02–0.10 V）
+
+底层实现都是 `signal_min_control_loop(gen, sa, mode, vpi, min_dbm, measure_fn, log_path, V_start, step_scale, signal_index)`，`s2_min_control_loop` 为其 `signal_index=2` 的 wrapper。
 
 
 ### `use_curve_fit: bool`

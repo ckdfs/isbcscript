@@ -182,6 +182,34 @@ def cmd_quick_estimate(mode, result_dir):
     v_valley = actual_offsets[valley_idx]
     s2_valley = s2_list[valley_idx]
 
+    if mode.control_strategy == 's1_min':
+        # S₁-min mode: find S₁ valley closest to vdc_ref (Vpi/2 for max_min)
+        ref = mode.vdc_ref(vpi)
+        median_s1 = sorted(s1_list)[len(s1_list) // 2]
+        candidates_s1 = []
+        for i in range(1, len(s1_list) - 1):
+            if s1_list[i] < s1_list[i - 1] and s1_list[i] < s1_list[i + 1]:
+                if s1_list[i] < median_s1 - 10:
+                    dist = abs(actual_offsets[i] - ref)
+                    candidates_s1.append((dist, i))
+        if candidates_s1:
+            valley_idx = min(candidates_s1)[1]
+        else:
+            valley_idx = min(range(len(s1_list)), key=lambda i: s1_list[i])
+        v_valley = actual_offsets[valley_idx]
+        s1_valley = s1_list[valley_idx]
+
+        log.info('Quick estimate (s1_min): valley @ offset=%.3f V  s1=%.1f dBm',
+                 v_valley, s1_valley)
+        io.save_json(os.path.join(result_dir, 'fit_result.json'), {
+            'strategy':       's1_min',
+            's1_valley_dbm':  s1_valley,
+            'V_valley':       v_valley,
+            'vpi_scan':       vpi,
+        })
+        log.info('Quick-estimate fit_result.json saved')
+        return {'s1_valley_dbm': s1_valley, 'V_valley': v_valley, 'vpi': vpi}
+
     if mode.control_strategy == 's2_min':
         # S₂-min mode: lock directly to the S₂ valley
         log.info('Quick estimate (s2_min): valley @ offset=%.3f V  s2=%.1f dBm',
@@ -243,7 +271,36 @@ def cmd_control(mode, result_dir):
     log_path = os.path.join(result_dir, 'control_log.csv')
     strategy = fd.get('strategy', 'ratio')
 
-    if strategy == 's2_min':
+    if strategy == 's1_min':
+        # ── S₁ gradient-descent control (max_min) ─────────────────────────
+        s1_valley_dbm = fd['s1_valley_dbm']
+        V_valley = fd['V_valley']
+
+        import config as cfg
+        log.info('=' * 50)
+        log.info('CONTROL phase  mode=%s  strategy=S₁-min  V_start=%.4f V  '
+                 'S₁_floor≈%.1f dBm',
+                 mode.name, V_valley, s1_valley_dbm)
+        log.info('Press Ctrl+C to stop and save the control plot')
+        log.info('=' * 50)
+        with DG922Pro() as gen, FSV30() as sa:
+            mode.configure_source(gen, vpi)
+            scan.setup_analyzer(sa)
+            try:
+                control.signal_min_control_loop(gen, sa, mode, vpi,
+                                                s1_valley_dbm,
+                                                measure_fn=scan.measure_markers,
+                                                log_path=log_path,
+                                                V_start=V_valley,
+                                                step_scale=0.003,
+                                                signal_index=1)
+            except KeyboardInterrupt:
+                log.info('Control loop stopped by user')
+            finally:
+                gen.output_off(1)
+                sa.set_input_coupling('AC')
+
+    elif strategy == 's2_min':
         # ── S₂ gradient-descent control (quad_pm) ──────────────────────────
         s2_valley_dbm = fd['s2_valley_dbm']
         V_valley = fd['V_valley']
@@ -298,6 +355,7 @@ def cmd_control(mode, result_dir):
         plot.save_control_plot(
             os.path.join(result_dir, 'control.png'),
             log_path, fd.get('r_target', 0), mode.name,
+            signal_index={'s1_min': 1, 's2_min': 2}.get(strategy, 2),
         )
         log.info('Control plot saved → control.png')
 
