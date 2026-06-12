@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+
+# PPT build QA/cache artifacts
+/docs/ppt_build/qa/
+/docs/ppt_build/**/*.aux
+/docs/ppt_build/**/*.log
+/docs/ppt_build/**/*.out
+/docs/ppt_build/**/*.pdf
