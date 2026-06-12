@@ -25,7 +25,8 @@ ARB波形文件已预加载于仪器，编码 200 kHz PWM切换 + 20 kHz导频�
 | 输入耦合 | **DC**（必须） | 信号 < 1 MHz，AC耦合引入高通截止 |
 | 中心频率 | 30 kHz | 覆盖 10–50 kHz |
 | 跨度 | 40 kHz | |
-| RBW / VBW | 300 Hz / 300 Hz | 窄带抑制噪底 |
+| 扫描 RBW / VBW | 100 Hz / 100 Hz | 与 `config.SCAN_RBW_HZ` / `SCAN_VBW_HZ` 一致 |
+| 控制 RBW / VBW | 100 Hz / 100 Hz | 与 `config.SA_RBW_HZ` / `SA_VBW_HZ` 一致 |
 | Marker 1 | 20 kHz | 读取 $P_1$（一阶功率） |
 | Marker 2 | 40 kHz | 读取 $P_2$（二阶功率） |
 | 功率校正 | −6 dB | 仪器已知读数偏高约 6 dB |
@@ -52,7 +53,8 @@ ARB波形文件已预加载于仪器，编码 200 kHz PWM切换 + 20 kHz导频�
 
 ## 步骤二：ARB模式 — 偏压扫描，验证切换效果
 
-**目的**：验证 $\phi_0=45°$ 偏移和 −3 dB功率损失；获取拟合数据。
+**目的**：验证 $\phi_0=\arctan((1-A)/A)$ 偏移和切换功率损失；获取拟合数据。
+默认 `config.PWM_DUTY_CYCLE = 0.5` 时，$\phi_0=45°$，功率损失为 -3 dB。
 
 **ARB参数设置**（由测得 $V_\pi$ 计算）：
 
@@ -85,14 +87,17 @@ ARB波形文件已预加载于仪器，编码 200 kHz PWM切换 + 20 kHz导频�
 
 **拟合模型**（以 $V_{DC,eff} = \text{actual\_offset} - V_\pi/4$ 为自变量，与代码一致）：
 
-$$r(V_{DC,eff}) = A\cdot\left|\tan\!\left(\frac{\pi}{4} - \frac{\pi(V_{DC,eff}-V_0)}{V_\pi^{fit}}\right)\right|$$
+$$r(V_{DC,eff}) = A_{fit}\cdot\left|\tan\!\left(\phi_0 - \frac{\pi(V_{DC,eff}-V_0)}{V_\pi^{fit}}\right)\right|$$
+
+其中 $\phi_0=\arctan((1-A_{duty})/A_{duty})$。默认 50% 占空比时退化为原来的 $\pi/4$ 形式。
 
 - 曲线随 $V_{DC,eff}$ 单调**递减**（硬件极性反向所致）
-- 左侧奇点（$P_2\to 0$，$r\to\infty$）在 $V_{DC,eff} = V_0 - V_\pi/4$
-- 目标点（$r = A = R_{target}$）在 $V_{DC,eff} = V_0$
-- 右侧零点（$P_1\to 0$，$r\to 0$）在 $V_{DC,eff} = V_0 + V_\pi/4$
+- 左侧奇点（$P_2\to 0$，$r\to\infty$）在 $V_{DC,eff} = V_0 - V_\pi(\pi/2-\phi_0)/\pi$
+- 目标点在 $V_{DC,eff} = V_0$，$R_{target}=A_{fit}\tan\phi_0$
+- 右侧零点（$P_1\to 0$，$r\to 0$）在 $V_{DC,eff} = V_0 + V_\pi\phi_0/\pi$
 
-拟合参数：$A$（= $R_{target}$）、$V_0$（零点修正，通常 $|V_0| < 0.1$ V）、$V_\pi^{fit}$（交叉验证）
+拟合参数：$A_{fit}$、$V_0$（零点修正，通常 $|V_0| < 0.1$ V）、$V_\pi^{fit}$（交叉验证）。
+默认 50% 占空比时 $R_{target}=A_{fit}$。
 
 **验证**：$V_\pi^{fit}$ 与步骤一谷值法差异应 < 10%；$|V_0|$ 应 < 0.5 V。
 
@@ -116,7 +121,7 @@ $$r(V_{DC,eff}) = A\cdot\left|\tan\!\left(\frac{\pi}{4} - \frac{\pi(V_{DC,eff}-V
 
 **控制目标**：
 
-$$e = r - R_{target} = \sqrt{P_1/P_2} - R_{target} = 0$$
+$$e = R_{target} - r = R_{target} - \sqrt{P_1/P_2} = 0$$
 
 **积分控制算法**：
 
@@ -125,13 +130,14 @@ $$e = r - R_{target} = \sqrt{P_1/P_2} - R_{target} = 0$$
 循环：
   1. FSV30 单次扫频，读取 s1_dbm, s2_dbm
   2. r = sqrt(P1_linear / P2_linear)
-  3. e = r - R_target
-  4. V_offset -= K_I * e   (K_I 从 0.005 开始调)
-  5. 限幅：V_offset ∈ [OFFSET_MIN, OFFSET_MAX]
-  6. gen.set_offset(1, V_offset)
+  3. e = R_target - r
+  4. K_I 按目标点斜率自动归一化
+  5. V_offset -= K_I * e
+  6. 限幅：V_offset ∈ mode.offset_limits(Vpi)
+  7. gen.set_offset(1, V_offset)
 ```
 
-**K_I 调参**：从 0.005 开始；稳定后逐步增大；振荡则减半。
+**K_I 调参**：默认 `config.K_I = 0.01`，代码会通过 `mode.adjust_k_i()` 按占空比和目标斜率归一化。
 控制周期由 FSV30 扫频时间决定（约 0.2–1 s）。
 
 **输出文件**：`results/{run}/control_log.csv`（timestamp, r, e, V_offset）

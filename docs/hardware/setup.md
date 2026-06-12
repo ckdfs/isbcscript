@@ -69,7 +69,38 @@ ping 192.168.99.209    # FSV30
 
 ---
 
+## ARB 波形约定
+
+`main.py` 的模式流程会在步骤二调用 `mode.configure_source()`：
+
+- 切换 CH1 到 ARB
+- 设置频率、幅度和 offset
+- 打开 CH1 输出
+
+当前流程**不负责重新上传 ARB 波形**。如果仪器内的 ARB 波形被清空或切到了错误文件，
+需要先用 DG922Pro 工具上传/选择对应波形：
+
+| 模式 | ARB 波形 |
+|------|----------|
+| `max_quad` | 200 kHz PWM + 20 kHz 正弦导频，幅度由 $V_\pi/2+0.8$ Vpp 恢复 |
+| `quad_pm` | 200 kHz 方波，HIGH=sin 导频，LOW=cos 导频，6.2 Vpp |
+| `max_min` | 200 kHz 方波，LOW=cos 导频，HIGH=sin 导频，$V_\pi+0.8$ Vpp |
+
+生成函数位于 `mzm/arb_waveforms.py`，但实验入口不会自动调用上传。
+
+---
+
 ## Vπ 校准流程
 
-每次实验前运行步骤一（或独立运行 `python vpi_scan.py`）重新测量 $V_\pi$。
+每次实验前运行步骤一重新测量 $V_\pi$：
+
+```bash
+python main.py --mode max_quad --step scan
+python main.py --mode quad_pm  --step scan
+python main.py --mode max_min  --step scan
+```
+
+也可以使用旧版独立脚本 `python vpi_scan.py` 作人工排查，但正式结果目录以
+`main.py` 生成的 `results/YYYYMMDD_HHMMSS_{mode}/` 为准。
+
 MZM的 $V_\pi$ 可能随温度和时间漂移，不应复用历史数据。

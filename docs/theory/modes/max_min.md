@@ -103,14 +103,14 @@ $|S_1| \propto |\sin\phi_{DC}|$ 在 $\phi_{DC}=0$ 处呈 V 形谷底：
 | 参数 | 值 | 说明 |
 |------|----|------|
 | 探针范围 | 0.02–0.10 V | $\propto \max(0.02, \min(0.10, \mathrm{excess\_dB}/50))$ |
-| 步长缩放 | 0.001 V/dB | $\mathrm{step} = 0.001 \times \mathrm{excess\_dB}$ |
+| 步长缩放 | 0.003 V/dB | $\mathrm{step} = 0.003 \times \mathrm{excess\_dB}$ |
 | 死区 | 0.002 V | step < 0.002 V 时不移动 |
 
 ## 4. 信号发生器设置
 
 | 参数 | 值 |
 |------|----|
-| CH1 模式 | ARB（代码上传，`load_arb_waveform`） |
+| CH1 模式 | ARB（预加载/已选中波形；生成函数见 `max_min_waveform`） |
 | 波形 | 16,384 点，200 kHz 方波，50% 占空比 |
 | 导频 | LOW = cos(20 kHz)，HIGH = sin(20 kHz)，各 ±0.4 V |
 | 物理幅度 | $V_\pi + 0.8$ Vpp |

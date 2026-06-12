@@ -13,12 +13,12 @@ class ModeBase(ABC):
 
     name: str              # 与 MODES 字典键名一致，用于日志和结果目录命名
     description: str       # 人类可读描述，显示在 --help 中
-    control_strategy: str  # 'ratio' (比值 PI 控制) 或 's2_min' (S₂ 梯度下降)
+    control_strategy: str  # 'ratio'、's2_min' 或 's1_min'
 
     # 必须实现的抽象方法
     def configure_source(self, gen: DG922Pro, vpi: float) -> None: ...
     def sweep_offsets(self, base_offsets: list[float], vpi: float) -> list[float]: ...
-    def fit_model(self, v: float, A: float, V0: float, vpi_fit: float) -> float: ...
+    def fit_model(self, v: float, A_fit: float, V0: float, vpi_fit: float) -> float: ...
     def initial_offset(self, vpi: float, V0_fit: float) -> float: ...
 
     # 可选重写的具体方法
@@ -37,7 +37,8 @@ class ModeBase(ABC):
 **约定**：
 - 函数返回前 CH1 输出应处于**打开**状态
 - 频率单位：Hz；幅度单位：Vpp；偏置单位：V
-- 若使用 ARB 模式，先发 `:SOURce1:FUNCtion ARB` 保留预加载波形
+- 若使用 ARB 模式，先发 `:SOURce1:FUNCtion ARB` 选择仪器上已有的 ARB 波形
+- 当前实验流程不在 `configure_source()` 中上传波形；上传/刷新 ARB 需在实验前完成
 
 **max_quad 示例**：
 ```python
@@ -87,7 +88,7 @@ return [round(v + vpi / 2, 6) for v in base_offsets]
 供 `scipy.optimize.curve_fit` 使用的拟合函数（仅 'ratio' 策略使用）。
 
 - `v`：有效偏置偏差 = `actual_offset - vdc_ref(vpi)`（V）
-- `A`：幅度参数（= $R_{target}$）
+- `A_fit`：拟合幅度参数；最终控制目标由 `compute_r_target(A_fit)` 给出
 - `V0`：零点修正（V）
 - `vpi_fit`：拟合半波电压（V）
 - 返回值：幅度比 $r$（无量纲）
@@ -97,20 +98,21 @@ return [round(v + vpi / 2, 6) for v in base_offsets]
 - 使用 `numpy.abs` / `numpy.tan`
 - max_quad 模式中 $r$ 随 $v$ 单调**递减**
 
-**通用形式**（max_quad 和 quad_pm 共用）：
+**max_quad 通用形式**（支持可配置占空比）：
 ```python
 import numpy as np
 
-def fit_model(self, v, A, V0, vpi_fit):
-    # r = A·|tan(π/4 − π(v−V0)/Vpi)|
-    #   左侧奇点（P2→0）：v = V0 − Vpi/4
-    #   目标点（r = A）：  v = V0
-    #   右侧零点（P1→0）：v = V0 + Vpi/4
-    return A * np.abs(np.tan(np.pi / 4 - np.pi * (v - V0) / vpi_fit))
+def fit_model(self, v, A_fit, V0, vpi_fit):
+    # r = A·|tan(φ0 − π(v−V0)/Vpi)|
+    # φ0 = arctan((1−duty)/duty)
+    phi0 = self.phi_0()
+    return A_fit * np.abs(np.tan(phi0 - np.pi * (v - V0) / vpi_fit))
 ```
 
 > **注意**：quad_pm 的 `vdc_ref = Vpi/2` 使其 `v=0` 在 S₂ 渐近线附近，
 > curve_fit 在此模式下不可靠。's2_min' 策略自动跳过拟合，改用扫描数据直接估算。
+> max_min 在目标点 $r=0$ 且存在 cusp，也设置 `use_curve_fit = False`，
+> 改用扫描数据中的 S₁ 谷底作为控制初值。
 
 ---
 
@@ -126,7 +128,8 @@ def fit_model(self, v, A, V0, vpi_fit):
 
 Vdc_eff 坐标参考点。默认 `vpi/4`（对应 max_quad 的目标点）。
 
-quad_pm 重写为 `vpi/2`（两正交点之间，S₂ 谷底位置）。
+quad_pm 和 max_min 重写为 `vpi/2`。quad_pm 中该位置为 S₂ 谷底，
+max_min 中该位置为最大点/最小点电气中点。
 
 ---
 
@@ -134,12 +137,22 @@ quad_pm 重写为 `vpi/2`（两正交点之间，S₂ 谷底位置）。
 
 控制回路中 CH1 offset 的安全范围。默认 `[vdc_ref − Vpi, vdc_ref + Vpi]`。
 
-quad_pm 重写以考虑 ARB 振幅 6.2 Vpp 带来的硬件上限 6.9 V：
+quad_pm 重写以考虑 ARB 振幅 6.2 Vpp 带来的硬件上限 6.9 V，
+并允许控制点向低端搜索两个 $V_\pi$：
 ```python
 def offset_limits(self, vpi):
     hw_hi, hw_lo = 6.9, -6.9   # ARB 输出摆幅 ±3.1 V
     center = self.vdc_ref(vpi)
-    return (max(hw_lo, center - vpi), min(hw_hi, center + vpi))
+    return (max(hw_lo, center - 2 * vpi), min(hw_hi, center + vpi))
+```
+
+max_min 的硬件限幅还要随 ARB 幅度变化：
+```python
+def offset_limits(self, vpi):
+    hw_hi = 10.0 - (vpi + 0.8) / 2
+    hw_lo = -10.0 + (vpi + 0.8) / 2
+    center = self.vdc_ref(vpi)
+    return (max(hw_lo, center - 2 * vpi), min(hw_hi, center + vpi))
 ```
 
 ---
@@ -160,6 +173,7 @@ def offset_limits(self, vpi):
 - `'s1_min'` → `signal_min_control_loop(signal_index=1)`（自适应探针 0.02–0.10 V）
 
 底层实现都是 `signal_min_control_loop(gen, sa, mode, vpi, min_dbm, measure_fn, log_path, V_start, step_scale, signal_index)`，`s2_min_control_loop` 为其 `signal_index=2` 的 wrapper。
+当前入口中 quad_pm 使用默认 `step_scale=0.001`，max_min 显式使用 `step_scale=0.003`。
 
 
 ### `use_curve_fit: bool`
@@ -173,6 +187,7 @@ def offset_limits(self, vpi):
 
 quad_pm 设为 `False`：其 `vdc_ref = Vpi/2` 恰好位于 $S_2$ 渐近线（$P_2\to 0$），
 比值 $r$ 在此处发散，curve_fit 初始猜测巨大导致拟合不可靠。
+max_min 也设为 `False`：目标点处 $r=0$，误差不含方向信息，直接使用 S₁ 谷底控制。
 
 ---
 

@@ -43,9 +43,11 @@
 
 ### ratio 策略（max_quad）
 
+`strategy` 字段可能存在，也可能省略。控制入口省略时按 `'ratio'` 处理。
+
 ```json
 {
-  "strategy":  "ratio",
+  "strategy":  "ratio",   // 可选；旧/常规 curve_fit 输出可能省略
   "r_target": 1.234,   // 控制目标比值（= A_fit）
   "A":        1.234,   // 拟合幅度参数
   "V0":       0.012,   // 零点修正（V）
@@ -81,7 +83,7 @@
 | `s1_dbm` | dBm | 当前 20 kHz 功率（已校正） |
 | `s2_dbm` | dBm | 当前 40 kHz 功率（已校正） |
 | `r` | — | 当前幅度比 $\sqrt{P_1/P_2}$ |
-| `error` | — | $r - R_{target}$ |
+| `error` | — | $R_{target} - r$（与 `control.pi_control_loop()` 一致） |
 | `offset_V` | V | 本次更新后的 CH1 offset |
 
 ### s1_min / s2_min 策略（`'dir'` 列存在）

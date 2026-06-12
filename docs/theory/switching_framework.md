@@ -130,4 +130,4 @@ $$\kappa_{min} = \frac{1}{\sqrt{2}} \implies \text{功率衰减} = -3\ \text{dB�
 
 - [mzm_basics.md](mzm_basics.md) — MZM基础模型
 - [modes/max_quad.md](modes/max_quad.md) — 代入 $A=0.5$ 的具体推导
-- [modes/quad_pm.md](modes/quad_pm.md) — 正/负正交点切换推导（待填充）
+- [modes/quad_pm.md](modes/quad_pm.md) — 正/负正交点切换推导
