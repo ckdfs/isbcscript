@@ -36,6 +36,40 @@ class ModeBase(ABC):
     def initial_offset(self, vpi: float, V0_fit: float) -> float:
         """Starting CH1 offset for the control loop (V)."""
 
+    # ── duty-cycle helpers ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def phi_0(duty: float = None) -> float:
+        """Phase offset from PWM duty cycle: φ₀ = arctan((1−A)/A).
+
+        Defaults to cfg.PWM_DUTY_CYCLE when duty is not given.
+        """
+        import math
+        import config as cfg
+        a = duty if duty is not None else cfg.PWM_DUTY_CYCLE
+        return math.atan((1 - a) / a)
+
+    def compute_r_target(self, A_fit: float) -> float:
+        """Convert the fitted amplitude A_fit to the actual R_target.
+
+        The default (A=0.5) identity is r_target = A_fit.  Modes with A ≠ 0.5
+        override this to account for the φ₀-dependent scaling:
+            r_target = A_fit · tan(φ₀)
+        """
+        return A_fit
+
+    # ── K_I auto-tuning ────────────────────────────────────────────────────────
+
+    def adjust_k_i(self, k_i_nominal: float, r_target: float, vpi: float) -> float:
+        """Normalise K_I for the slope |dr/dV| at the target point.
+
+        The PI loop is stable when K_I · |dr/dV| ≈ const.  Different duty
+        cycles change the slope, so K_I must be adjusted inversely.
+
+        Default: return k_i_nominal unchanged (slope ≈ 1 assumed).
+        """
+        return k_i_nominal
+
     # ── control strategy ────────────────────────────────────────────────────────
 
     control_strategy: str = 'ratio'   # 'ratio' (PI on r) or 's2_min' (gradient descent on S₂)

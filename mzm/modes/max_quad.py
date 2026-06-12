@@ -6,11 +6,19 @@ Experiment: docs/experiments/modes/max_quad.md
 
 Signal: CH1 ARB (pre-loaded waveform encodes 200 kHz PWM + 20 kHz pilot)
   amp    = Vpi/2 + 0.8  (Vpp)
-  offset = Vpi/4        (V)   ← center of control range
+  offset = Vpi/4        (V)   ← centre of control range
   freq   = 20 kHz
 
-Duty cycle A = 0.5  →  phi_0 = 45°,  kappa = 1/sqrt(2)  (-3 dB)
-R_target = A_fit  (empirical, from ratio_fit)
+Duty-cycle configurable via cfg.PWM_DUTY_CYCLE:
+  A   = cfg.PWM_DUTY_CYCLE
+  φ₀  = arctan((1−A)/A)
+  κ   = sqrt(A² + (1−A)²)        →  power loss = −10·log₁₀(κ²)
+
+  A=0.5 → φ₀=45°, κ=1/√2 (−3 dB)
+  A=0.6 → φ₀≈33.7°, κ≈0.721 (−2.8 dB)
+  A=0.9 → φ₀≈6.3°, κ≈0.906 (−0.9 dB)
+
+R_target = A_fit · tan(φ₀)  (computed from ratio_fit via compute_r_target)
 """
 
 import math
@@ -22,7 +30,7 @@ from mzm.modes.base import ModeBase
 
 class MaxQuadMode(ModeBase):
     name        = 'max_quad'
-    description = '最大/最小点 ↔ 正交点切换  (A=0.5, φ₀=45°, −3 dB)'
+    description = '最大/最小点 ↔ 正交点切换  (A可配, φ₀=arctan((1−A)/A))'
 
     def configure_source(self, gen, vpi: float) -> None:
         amp    = vpi / 2 + 0.8
@@ -37,13 +45,26 @@ class MaxQuadMode(ModeBase):
         shift = vpi / 4
         return [round(v + shift, 6) for v in base_offsets]
 
-    def fit_model(self, v, A: float, V0: float, vpi_fit: float):
-        # r = A·|tan(π/4 − π(v−V0)/Vpi)|
-        # Monotonically decreasing in vdc_eff:
-        #   asymptote (P2→0) at vdc_eff = V0 − Vpi/4  (left edge)
-        #   target R_target = A at vdc_eff = V0         (centre)
-        #   zero    (P1→0) at vdc_eff = V0 + Vpi/4  (right edge)
-        return A * np.abs(np.tan(np.pi / 4 - np.pi * (v - V0) / vpi_fit))
+    def fit_model(self, v, A, V0, vpi_fit):
+        # r = A·|tan(φ₀ − π(v−V0)/Vpi)|
+        # φ₀ = arctan((1−A_duty)/A_duty), A_duty = cfg.PWM_DUTY_CYCLE
+        # Monotonically decreasing in vdc_eff centred at v=V0:
+        #   asymptote (P2→0) at vdc_eff = V0 − Vpi·(1/2−φ₀/π)
+        #   r = A·tan(φ₀)    at vdc_eff = V0         (centre)
+        #   zero    (P1→0) at vdc_eff = V0 + Vpi·φ₀/π
+        phi0 = self.phi_0()
+        return A * np.abs(np.tan(phi0 - np.pi * (v - V0) / vpi_fit))
 
     def initial_offset(self, vpi: float, V0_fit: float) -> float:
         return vpi / 4 + V0_fit
+
+    def compute_r_target(self, A_fit: float) -> float:
+        return A_fit * math.tan(self.phi_0())
+
+    def adjust_k_i(self, k_i_nominal: float, r_target: float, vpi: float) -> float:
+        # |dr/dV| at target = r_target · π / (Vpi · sin φ₀ · cos φ₀)
+        # Target: K_I · |dr/dV| ≈ 0.22  (empirically tuned at A=0.5)
+        phi0 = self.phi_0()
+        slope = r_target * math.pi / (vpi * math.sin(phi0) * math.cos(phi0))
+        target_product = 0.22   # K_I_nominal · slope_A05
+        return target_product / slope

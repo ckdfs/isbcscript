@@ -141,8 +141,9 @@ def cmd_fit(mode, result_dir):
 def cmd_quick_estimate(mode, result_dir):
     """Estimate control target from scan CSV — skip curve_fit.
 
-    'ratio' strategy (max_quad): finds s2 valley, walks Vpi/4 into the
-        monotonic region, reads r as R_target and computes V0.
+    'ratio' strategy (max_quad): finds s2 valley, walks Vpi·(π/2−φ₀)/π
+        into the monotonic region, reads r as R_target and computes V0.
+        For A=0.5 (φ₀=π/4) this is Vpi/4; for general A it adapts.
     's2_min' strategy (quad_pm): finds the deepest s2 valley and uses
         its offset / s2 value directly for gradient-descent control.
     """
@@ -228,19 +229,26 @@ def cmd_quick_estimate(mode, result_dir):
     p1 = [10 ** (s / 10) for s in s1_list]
     p2 = [10 ** (s / 10) for s in s2_list]
 
+    # S₂ valley → target distance depends on φ₀ = arctan((1−A)/A).
+    # S₂ ∝ cos(φ_DC + φ₀), valley at φ_DC = π/2 − φ₀.
+    # In Vdc_eff: valley = V0 − Vpi·(π/2−φ₀)/π  →  V0 = valley + Vpi·(π/2−φ₀)/π.
+    phi0 = mode.phi_0()
+    valley_to_target = vpi * (math.pi / 2 - phi0) / math.pi  # = Vpi/4 when A=0.5
+
     v_valley_eff = v_valley - ref
-    V0_est = v_valley_eff + vpi / 4
+    V0_est = v_valley_eff + valley_to_target
     target_off = ref + V0_est
     best_idx = min(range(len(actual_offsets)),
                    key=lambda i: abs(actual_offsets[i] - target_off))
     r_est = (p1[best_idx] / p2[best_idx]) ** 0.5
 
-    log.info('Quick estimate: s2 valley @ %.3f V  →  target @ %.3f V  (Vpi/4 away)',
-             v_valley, target_off)
-    log.info('  v_valley=%.3f V  V0=%.3f V  R_target=%.4f',
+    log.info('Quick estimate: s2 valley @ %.3f V  →  target @ %.3f V  (φ₀=%.1f°, dist=%.3f V)',
+             v_valley, target_off, math.degrees(phi0), valley_to_target)
+    log.info('  v_valley_eff=%.3f V  V0=%.3f V  R_target=%.4f',
              v_valley_eff, V0_est, r_est)
 
-    result = fit.FitResult(A=float(r_est), V0=float(V0_est), vpi_fit=vpi)
+    result = fit.FitResult(A=float(r_est), V0=float(V0_est), vpi_fit=vpi,
+                           r_target=float(r_est))
     io.save_json(os.path.join(result_dir, 'fit_result.json'), {
         'strategy':  'ratio',
         'r_target':  result.r_target,
@@ -329,7 +337,9 @@ def cmd_control(mode, result_dir):
 
     else:
         # ── ratio PI control (max_quad) ────────────────────────────────────
-        fit_result = fit.FitResult(A=fd['A'], V0=fd['V0'], vpi_fit=fd['vpi_fit'])
+        r_target_val = fd.get('r_target', fd['A'])  # backward compat: old JSON lacks r_target
+        fit_result = fit.FitResult(A=fd['A'], V0=fd['V0'], vpi_fit=fd['vpi_fit'],
+                                   r_target=r_target_val)
 
         import config as cfg
         v_start = mode.initial_offset(vpi, fit_result.V0)

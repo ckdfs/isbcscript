@@ -19,13 +19,10 @@ log = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class FitResult:
-    A:       float    # empirical amplitude = R_target
-    V0:      float    # zero-point correction (V)
-    vpi_fit: float    # cross-check Vpi from fit (V)
-
-    @property
-    def r_target(self) -> float:
-        return self.A
+    A:         float    # fitting amplitude (Bessel scale factor J₁/J₂)
+    V0:        float    # zero-point correction (V)
+    vpi_fit:   float    # cross-check Vpi from fit (V)
+    r_target:  float = 0.0  # actual target ratio; = mode.compute_r_target(A)
 
 
 def ratio_fit(actual_offsets: list, s1_dbm: list, s2_dbm: list,
@@ -77,6 +74,7 @@ def ratio_fit(actual_offsets: list, s1_dbm: list, s2_dbm: list,
         vdc_fit, r_fit, p0=p0, bounds=bounds, maxfev=10000,
     )
     A_fit, V0_fit, Vpi_fit = popt
+    r_target = mode.compute_r_target(A_fit)
 
     # Per-point residuals for quality check
     r_pred = np.array([mode.fit_model(v, A_fit, V0_fit, Vpi_fit) for v in vdc_fit])
@@ -84,4 +82,5 @@ def ratio_fit(actual_offsets: list, s1_dbm: list, s2_dbm: list,
     rmse = float(np.sqrt(np.mean(residuals ** 2)))
     log.info('Fit converged: R² ≈ %.4f  RMSE=%.4f', 1 - rmse / np.std(r_fit), rmse)
 
-    return FitResult(A=float(A_fit), V0=float(V0_fit), vpi_fit=float(Vpi_fit))
+    return FitResult(A=float(A_fit), V0=float(V0_fit), vpi_fit=float(Vpi_fit),
+                     r_target=r_target)

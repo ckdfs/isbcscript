@@ -26,10 +26,11 @@ def pi_control_loop(gen, sa, mode, fit_result: FitResult, vpi: float,
     offset_min, offset_max = mode.offset_limits(vpi)
     V_offset  = mode.initial_offset(vpi, fit_result.V0)
     R_target  = fit_result.r_target
+    k_i       = mode.adjust_k_i(k_i, R_target, vpi)   # normalise for duty cycle
     t0        = time.time()
 
     log.info(f'Control loop started  R_target={R_target:.4f}'
-             f'  V_init={V_offset:.4f} V  K_I={k_i}'
+             f'  V_init={V_offset:.4f} V  K_I={k_i:.6f}'
              f'  limits=[{offset_min:.1f}, {offset_max:.1f}] V')
 
     _csv_file = open(log_path, 'w', newline='', encoding='utf-8') if log_path else None
@@ -49,7 +50,7 @@ def pi_control_loop(gen, sa, mode, fit_result: FitResult, vpi: float,
             p1 = 10 ** (s1 / 10)
             p2 = 10 ** (s2 / 10)
             r  = (p1 / p2) ** 0.5
-            e  = r - R_target
+            e  = R_target - r   # r(V) is monotonically decreasing → this sign corrects toward target
 
             V_offset = max(offset_min, min(offset_max, V_offset - k_i * e))
             gen.set_offset(1, V_offset)
